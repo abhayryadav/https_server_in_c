@@ -12,6 +12,7 @@ typedef struct {
     int * client_fdth;
     int xth;
 } thread_args;
+
 void *handle_connection(void *thread_args_nth);	
 
 
@@ -20,13 +21,8 @@ int main() {
 	setbuf(stdout, NULL);
  	setbuf(stderr, NULL);
 
-	// You can use print statements as follows for debugging, they'll be visible when running tests.
-	printf("Logs from your program will appear here!\n");
 
-	// Uncomment this block to pass the first stage
-	//
-	int server_fd, client_addr_len;
-	struct sockaddr_in client_addr;
+	int server_fd;
 	//
 	server_fd = socket(AF_INET, SOCK_STREAM, 0);
 	if (server_fd == -1) {
@@ -34,7 +30,7 @@ int main() {
 		return 1;
 	}
 	
-	// Since the tester restarts your program quite often, setting SO_REUSEADDR
+	// setting SO_REUSEADDR
 	// ensures that we don't run into 'Address already in use' errors
 	int reuse = 1;
 	if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) < 0) {
@@ -59,33 +55,36 @@ int main() {
 	}
 	
 	printf("Waiting for a client to connect...\n");
-	client_addr_len = sizeof(client_addr);
+	
     int x =0;
 	while (1)
 	{
-		int client_fd  = accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
-		printf("Client connected\n");
-        ////////
-        
+        int client_addr_len;
+	    struct sockaddr_in client_addr;
+        client_addr_len = sizeof(client_addr);
+		int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, &client_addr_len);
+        if (client_fd < 0) {
+            perror("Accept failed");
+            continue; // Go to the next iteration if accept fails
+        }
+        printf("Client connected\n");
+
+        // Allocate and initialize thread arguments
         thread_args *thread_argsn = malloc(sizeof(thread_args));
-        thread_argsn->client_fdth = &client_fd;
-        thread_argsn->xth= x;  // Set the desired value of x here
-        x++;
+        thread_argsn->client_fdth = malloc(sizeof(int));
+        *(thread_argsn->client_fdth) = client_fd; // Store the client_fd
+        thread_argsn->xth = x++;
+
+        // Create a new thread to handle the connection
         pthread_t new_thread;
         if (pthread_create(&new_thread, NULL, handle_connection, (void *)thread_argsn) != 0) {
             printf("Thread creation failed: %s\n", strerror(errno));
-            close(client_fd);
+            close(client_fd); // Close client_fd if thread creation fails
+            free(thread_argsn->client_fdth);
             free(thread_argsn);
         } else {
-            pthread_detach(new_thread);
-        } 
-
-        pthread_join(new_thread, NULL);
-        // int *pclient_socket = &client_fd;
-        // pthread_create(&new_process, NULL, handle_connection, pclient_socket);
-
-		
-		
+            pthread_detach(new_thread); // Detach the thread to let it run independently
+        }
 	}
     
     
@@ -153,5 +152,5 @@ void *handle_connection(void *thread_args_nth){
 		}
         puts("-----------");
         return NULL;
-    
+
 }
